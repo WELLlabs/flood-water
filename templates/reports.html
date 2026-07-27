@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Flood Reports</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <a href="/">⬅ Back to Map</a>
+    <h1>All Flood Reports</h1>
+  </header>
+
+  <table>
+    <thead>
+      <tr><th>ID</th><th>Description</th><th>Latitude</th><th>Longitude</th><th>Image</th><th>Time</th></tr>
+    </thead>
+    <tbody id="reportTable"></tbody>
+  </table>
+
+  <script>
+    fetch("/reports").then(r => r.json()).then(data => {
+      const tbody = document.getElementById("reportTable");
+      data.forEach(r => {
+        tbody.innerHTML += `
+          <tr>
+            <td>${r.id}</td>
+            <td>${r.desc}</td>
+            <td>${r.lat}</td>
+            <td>${r.lng}</td>
+            <td><img src="${r.image}" width="100"></td>
+            <td>${new Date(r.timestamp).toLocaleString()}</td>
+          </tr>`;
+      });
+    });
+  </script>
+</body>
+</html>
