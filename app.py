@@ -118,6 +118,24 @@ def upload_to_s3(image_stream: io.BytesIO, fmt: str) -> str:
     return s3_public_url(key)
 
 
+def _iso(value):
+    """
+    Normalise a datetime-ish field for the JSON response.
+    Handles: None, real datetime objects, and legacy string values that
+    were written before the schema was cleaned up.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, str):
+        # Already stored as a string — return as-is. It's the frontend's
+        # job to parse; safeDate() in index.html already handles this.
+        return value
+    # Anything else (int/float epoch, etc.) — coerce to string as a last resort.
+    return str(value)
+
+
 def serialize_report(doc: dict) -> dict:
     return {
         "id": str(doc["_id"]),
@@ -125,12 +143,11 @@ def serialize_report(doc: dict) -> dict:
         "lng": doc.get("lng"),
         "desc": doc.get("desc"),
         "image": doc.get("image_url"),
-        "flood_datetime":
-            doc["flood_datetime"].isoformat() if doc.get("flood_datetime") else None,
+        "flood_datetime":    _iso(doc.get("flood_datetime")),
         "flood_depth_cm":    doc.get("flood_depth_cm"),
         "flood_depth_label": doc.get("flood_depth_label"),
         "flood_depth_asset": doc.get("flood_depth_asset"),
-        "timestamp":         doc["timestamp"].isoformat() if doc.get("timestamp") else None,
+        "timestamp":         _iso(doc.get("timestamp")),
     }
 
 
