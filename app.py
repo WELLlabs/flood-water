@@ -8,6 +8,7 @@ from flask import Flask, request, jsonify, render_template
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -19,6 +20,10 @@ from PIL import Image
 
 # ---------- APP CONFIG ----------
 app = Flask(__name__)
+# Trust the reverse proxy (nginx) for client IP, scheme, host, and URL prefix.
+# x_prefix=1 makes Flask honour X-Forwarded-Prefix, so the app works correctly
+# when mounted under a sub-path like /reportflood.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 CORS(app)
 
 limiter = Limiter(get_remote_address, app=app, default_limits=["10/minute"])
@@ -249,4 +254,6 @@ def delete_report(id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=False)
+    # Local development only. In production this file is loaded by gunicorn
+    # (`gunicorn app:app`) and this block is not executed.
+    app.run(host="127.0.0.1", port=5555, debug=True)
