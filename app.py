@@ -30,8 +30,8 @@ limiter = Limiter(get_remote_address, app=app, default_limits=["10/minute"])
 
 # ---------- MONGODB CONFIG ----------
 MONGO_URI       = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-MONGO_DB_NAME   = os.getenv("MONGO_DB_NAME", "flood_map")
-MONGO_COLL_NAME = os.getenv("MONGO_COLLECTION", "flood_reports")
+MONGO_DB_NAME   = os.getenv("MONGO_DB_NAME", "floodreports")
+MONGO_COLL_NAME = os.getenv("MONGO_COLLECTION", "reports")
 
 mongo_client = MongoClient(MONGO_URI)
 db_mongo     = mongo_client[MONGO_DB_NAME]
