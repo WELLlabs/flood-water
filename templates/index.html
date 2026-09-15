@@ -871,9 +871,9 @@ function showToast(msg, isError = false) {
 
 // ── MAP ──
 map = L.map("map", { zoomControl: false }).setView([12.9716, 77.5946], 12);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-  attribution: '© <a href="https://www.openstreetmap.org/copyright">OSM</a> © <a href="https://carto.com/">CARTO</a>',
-  subdomains: 'abcd', maxZoom: 19
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19
 }).addTo(map);
 L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
