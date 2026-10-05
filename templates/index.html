@@ -296,7 +296,53 @@ header {
   font-size: 0.74em; color: var(--amber);
   display: flex; align-items: center; gap: 6px;
 }
+#mapPickerHint .expand-btn {
+  margin-left: auto; display: flex; align-items: center; gap: 4px;
+  background: white; border: 1px solid var(--amber-bd);
+  color: var(--amber); border-radius: 6px;
+  padding: 3px 8px; font-size: 0.95em; font-weight: 500;
+  cursor: pointer; font-family: var(--sans);
+  transition: background 0.12s;
+}
+#mapPickerHint .expand-btn:hover { background: var(--amber-bg); }
 #modalMap { height: 190px; }
+
+/* Fullscreen map takeover — when active, modalMap covers the viewport */
+#mapPickerWrap.fullscreen {
+  position: fixed; inset: 0; z-index: 5000;
+  border-radius: 0; border: none;
+  background: var(--cream);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+#mapPickerWrap.fullscreen #mapPickerHint {
+  border-radius: 0;
+}
+#mapPickerWrap.fullscreen #modalMap {
+  flex: 1; height: auto;
+}
+#fsConfirmBar {
+  display: none;
+  padding: 12px 14px;
+  background: var(--cream); border-top: 1px solid var(--border);
+  gap: 10px;
+}
+#mapPickerWrap.fullscreen #fsConfirmBar { display: flex; }
+#fsConfirmBtn {
+  flex: 1; background: var(--terra); color: white;
+  border: none; border-radius: 10px;
+  padding: 12px 16px; font-size: 0.92em; font-weight: 600;
+  cursor: pointer; font-family: var(--sans);
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  box-shadow: 0 2px 10px rgba(74,123,168,0.25);
+}
+#fsConfirmBtn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+#fsCancelBtn {
+  background: var(--cream-2); border: 1px solid var(--border);
+  color: var(--brown-2); border-radius: 10px;
+  padding: 12px 16px; font-size: 0.92em; font-weight: 500;
+  cursor: pointer; font-family: var(--sans);
+}
 
 /* ── IMAGE DROP ── */
 .image-drop {
@@ -704,9 +750,25 @@ textarea.field-input { resize: vertical; min-height: 80px; line-height: 1.5; }
         <div id="mapPickerWrap">
           <div id="mapPickerHint">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Tap anywhere on the map to drop a pin
+            <span id="mapPickerHintText">Tap anywhere on the map to drop a pin</span>
+            <button type="button" class="expand-btn" id="mapExpandBtn" aria-label="Expand map">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 3 21 3 21 9"/>
+                <polyline points="9 21 3 21 3 15"/>
+                <line x1="21" y1="3" x2="14" y2="10"/>
+                <line x1="3" y1="21" x2="10" y2="14"/>
+              </svg>
+              <span id="mapExpandLabel">Expand</span>
+            </button>
           </div>
           <div id="modalMap"></div>
+          <div id="fsConfirmBar">
+            <button type="button" id="fsCancelBtn">Cancel</button>
+            <button type="button" id="fsConfirmBtn" disabled>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Use this location
+            </button>
+          </div>
         </div>
       </div>
 
@@ -979,18 +1041,88 @@ document.getElementById("methodMap").onclick = () => {
   setTimeout(() => {
     if (!modalMap) {
       modalMap = L.map("modalMap").setView([12.9716, 77.5946], 13);
-      L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
-        { subdomains: 'abcd', maxZoom: 19 }).addTo(modalMap);
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+  attribution: 'Tiles © Esri — Esri, DeLorme, NAVTEQ',
+  maxZoom: 19
+}).addTo(modalMap);
       modalMap.on("click", e => {
         if (modalMarker) modalMarker.setLatLng(e.latlng);
         else modalMarker = L.marker(e.latlng, { icon: markerIcon }).addTo(modalMap);
         setLocation(e.latlng.lat, e.latlng.lng,
           `Pinned · ${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`);
+        // In fullscreen mode, enable the "Use this location" button once a pin exists
+        if (fsConfirmBtn) fsConfirmBtn.disabled = false;
       });
     }
     modalMap.invalidateSize();
   }, 150);
 };
+
+// ── FULLSCREEN MAP TOGGLE ──
+// On mobile the small 190px map is awkward to pan. Tapping Expand takes it
+// over the whole viewport until the user picks a spot and confirms.
+const mapExpandBtn   = document.getElementById("mapExpandBtn");
+const mapExpandLabel = document.getElementById("mapExpandLabel");
+const mapHintText    = document.getElementById("mapPickerHintText");
+const fsConfirmBtn   = document.getElementById("fsConfirmBtn");
+const fsCancelBtn    = document.getElementById("fsCancelBtn");
+
+// Snapshot of location state when fullscreen opens, so Cancel can revert it.
+let fsSnapshot = null;
+
+function openFullscreenMap() {
+  fsSnapshot = {
+    lat: pendingLat, lng: pendingLng,
+    statusText: statusText.textContent,
+    statusClass: locationStatus.className,
+    markerLatLng: modalMarker ? modalMarker.getLatLng() : null,
+  };
+  mapPickerWrap.classList.add("fullscreen");
+  mapHintText.textContent = "Pan and tap to drop a pin";
+  mapExpandLabel.textContent = "Shrink";
+  fsConfirmBtn.disabled = !pendingLat || !pendingLng;
+  document.body.style.overflow = "hidden";
+  setTimeout(() => modalMap && modalMap.invalidateSize(), 50);
+}
+
+function closeFullscreenMap(revert) {
+  if (revert && fsSnapshot) {
+    pendingLat = fsSnapshot.lat;
+    pendingLng = fsSnapshot.lng;
+    statusText.textContent = fsSnapshot.statusText;
+    locationStatus.className = fsSnapshot.statusClass;
+    if (fsSnapshot.markerLatLng && modalMarker) {
+      modalMarker.setLatLng(fsSnapshot.markerLatLng);
+    } else if (!fsSnapshot.markerLatLng && modalMarker) {
+      modalMap.removeLayer(modalMarker);
+      modalMarker = null;
+    }
+  }
+  fsSnapshot = null;
+  mapPickerWrap.classList.remove("fullscreen");
+  mapHintText.textContent = "Tap anywhere on the map to drop a pin";
+  mapExpandLabel.textContent = "Expand";
+  document.body.style.overflow = "";
+  setTimeout(() => modalMap && modalMap.invalidateSize(), 50);
+}
+
+mapExpandBtn.onclick = () => {
+  if (mapPickerWrap.classList.contains("fullscreen")) {
+    // "Shrink" acts like Confirm — keep the pin, close fullscreen
+    closeFullscreenMap(false);
+  } else {
+    openFullscreenMap();
+  }
+};
+fsConfirmBtn.onclick = () => closeFullscreenMap(false);
+fsCancelBtn.onclick  = () => closeFullscreenMap(true);
+
+// Escape key closes fullscreen (treated as Cancel)
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && mapPickerWrap.classList.contains("fullscreen")) {
+    closeFullscreenMap(true);
+  }
+});
 
 imageInput.onchange = e => {
   const file = e.target.files[0]; if (!file) return;
@@ -1014,6 +1146,14 @@ document.getElementById("uploadBtn").onclick = () => floodModal.classList.add("o
 
 function closeModal() {
   floodModal.classList.remove("open");
+  // If fullscreen map is open, close it and release body scroll lock
+  if (mapPickerWrap.classList.contains("fullscreen")) {
+    mapPickerWrap.classList.remove("fullscreen");
+    document.body.style.overflow = "";
+    if (mapExpandLabel) mapExpandLabel.textContent = "Expand";
+    if (mapHintText)    mapHintText.textContent    = "Tap anywhere on the map to drop a pin";
+    fsSnapshot = null;
+  }
   pendingLat = null; pendingLng = null; activeMethod = null;
   locationStatus.className = ""; mapPickerWrap.classList.remove("show");
   imageDrop.style.display = ""; imagePreviewWrap.classList.remove("show");
