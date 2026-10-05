@@ -749,6 +749,8 @@ textarea.field-input { resize: vertical; min-height: 80px; line-height: 1.5; }
 
         <div id="mapPickerWrap">
           <div id="mapPickerHint">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="mapPickerHintText">Tap anywhere on the map to drop a pin</span>
             <button type="button" class="expand-btn" id="mapExpandBtn" aria-label="Expand map">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 3 21 3 21 9"/>
@@ -1035,7 +1037,6 @@ document.getElementById("methodDevice").onclick = () => {
 
 document.getElementById("methodMap").onclick = () => {
   activateMethod("methodMap"); mapPickerWrap.classList.add("show"); clearLocation();
-  setLocationPending("Tap the map below to drop a pin");
   setTimeout(() => {
     if (!modalMap) {
       modalMap = L.map("modalMap").setView([12.9716, 77.5946], 13);
